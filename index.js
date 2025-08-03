@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require("cors");
 const port = process.env.PORT || 1000;
@@ -9,29 +10,29 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express()
 app.use(cors({
-  origin:['http://localhost:5173'],
-  credentials:true,
+  origin: ['https://ezinvo-billing-client.web.app', 'http://localhost:5173'],
+  credentials: true,
 }))
 app.use(express.json())
 app.use(cookieParser())
 
 
-const verifyToken =(req,res,next) =>{
+const verifyToken = (req, res, next) => {
   const token = req.cookies?.token;
-  if(!token){
-    return res.status(401).send({message: 'unauthorized access'})
+  if (!token) {
+    return res.status(401).send({ message: 'unauthorized access' })
   }
-  
-  jwt.verify(token, process.env.JWT_SECRET,(err,decoded) =>{
-    if(err){
-      return res.status(401).send({message: 'unauthorized access'})
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: 'unauthorized access' })
     }
 
     req.user = decoded;
 
     next()
   })
-  
+
 }
 
 
@@ -55,26 +56,28 @@ async function run() {
     const invoiceCollection = client.db("EzInvoBilling").collection("invoiceCollection")
     const invoiceUsersCollection = client.db("EzInvoBilling").collection("usersCollection")
 
- 
-    app.post('/jwt', async(req,res) =>{
+
+    app.post('/jwt', async (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user,process.env.JWT_SECRET,{expiresIn: '7d'});
-      res.cookie('token', token,{
-        httpOnly:true,
-        secure: false
-      }).send({success: true})
+      const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '7d' });
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'None',
+      }).send({ success: true })
     })
 
 
     app.post("/usersCollection", async (req, res) => {
+
       const userData = req.body;
       const result = await invoiceUsersCollection.insertOne(userData)
       res.send(result)
     })
-    app.get("/usersCollection/:email",verifyToken, async (req, res) => {
+    app.get("/usersCollection/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
-      if(req.user.email !== email){
-        res.status(403).send({message: 'forbidden access'})
+      if (req.user.email !== email) {
+        res.status(403).send({ message: 'forbidden access' })
       }
       const query = { email }
       const result = await invoiceUsersCollection.findOne(query)
@@ -88,7 +91,11 @@ async function run() {
       res.send({ isAdmin: user?.role === 'admin' })
     })
     app.get("/usersCollection", async (req, res) => {
-      const query = {}
+      let query = {}
+      const search = req.query?.search;
+      if (search) {
+        query.email = { $regex: search, $options: "i" }
+      }
       const result = await invoiceUsersCollection.find(query).toArray()
       res.send(result)
     })
@@ -162,31 +169,28 @@ async function run() {
       const result = await invoiceCollection.insertOne(invoiceData)
       res.send(result)
     })
-    app.get("/invoiceCollections/:email", verifyToken, async (req, res) => {
-     
-      const email = req.params.email;
 
-      if(req.user.email !== email){
-        return res.status(403).send({message: "forbidden access"})
+
+    app.get("/invoiceCollections",  async (req, res) => {
+      const { email, search } = req.query;
+      let query = {};
+
+      if (email) {
+        query.email = email;
       }
 
-      const query = { email }
-      
-      const result = await invoiceCollection.find(query).toArray()
-      res.send(result)
-    })
-    app.get("/invoiceCollections", async (req, res) => {
+      if (search) {
+        query.clientsEmail = { $regex: search, $options: "i" }; // assuming you search by client's email
+      }
 
-      const query = {}
-
-      const result = await invoiceCollection.find(query).toArray()
-      res.send(result)
-    })
+      const result = await invoiceCollection.find(query).toArray();
+      res.send(result);
+    });
 
     app.get('/invoiceCollections/invoice/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) }
-      
+
       const itemDetails = await invoiceCollection.findOne(query);
 
       res.json(itemDetails)
@@ -256,10 +260,10 @@ async function run() {
     app.post('/invoicePay/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) }
-    
+
 
       const invoice = await invoiceCollection.findOne(query);
-  
+
       if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
       // If already paid
@@ -310,7 +314,7 @@ async function run() {
       res.json({ message: 'Invoice marked as paid.' });
     });
 
-    app.get('/allPaidData',async (req,res) =>{
+    app.get('/allPaidData', async (req, res) => {
       const result = await invoiceCollection.find({ paid: true }).toArray()
       res.send(result)
     })
@@ -331,6 +335,14 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`ezinvo is running on ${port}`)
 })
+
+
+
+
+
+
+
+
 
 
 
