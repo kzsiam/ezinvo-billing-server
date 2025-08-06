@@ -10,7 +10,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express()
 app.use(cors({
-  origin: ['https://ezinvo-billing-client.web.app', 'http://localhost:5173'],
+  origin:'http://localhost:5173',
   credentials: true,
 }))
 app.use(express.json())
@@ -19,13 +19,14 @@ app.use(cookieParser())
 
 const verifyToken = (req, res, next) => {
   const token = req.cookies?.token;
+  // console.log(Date.now(), token)
   if (!token) {
-    return res.status(401).send({ message: 'unauthorized access' })
+    return res.status(401).send({ message: 'unauthorized access not found',token:token || null })
   }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
-      return res.status(401).send({ message: 'unauthorized access' })
+      return res.status(401).send({ message: 'unauthorized access not verify',token:token || null })
     }
 
     req.user = decoded;
@@ -36,7 +37,7 @@ const verifyToken = (req, res, next) => {
 }
 
 
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId, Timestamp } = require('mongodb');
 const uri = `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@cluster0.pzjaifg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -58,12 +59,13 @@ async function run() {
 
 
     app.post('/jwt', async (req, res) => {
-      const user = req.body;
-      const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '7d' });
+      const user =  req.body;
+      const token = jwt.sign(user, process.env.JWT_SECRET);
       res.cookie('token', token, {
         httpOnly: true,
         secure: true,
         sameSite: 'None',
+        maxAge: 7 * 24 * 60 * 60 * 1000
       }).send({ success: true })
     })
 
@@ -76,6 +78,7 @@ async function run() {
     })
     app.get("/usersCollection/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
+      // console.log(email)
       if (req.user.email !== email) {
         res.status(403).send({ message: 'forbidden access' })
       }
@@ -90,8 +93,13 @@ async function run() {
       const user = await invoiceUsersCollection.findOne(query);
       res.send({ isAdmin: user?.role === 'admin' })
     })
-    app.get("/usersCollection", async (req, res) => {
+    app.get("/usersCollection", verifyToken, async (req, res) => {
       let query = {}
+      const { email } = req.query;
+
+      if (req.user.email !== email) {
+        res.status(403).send({ message: 'forbidden access' })
+      }
       const search = req.query?.search;
       if (search) {
         query.email = { $regex: search, $options: "i" }
@@ -171,9 +179,26 @@ async function run() {
     })
 
 
-    app.get("/invoiceCollections",  async (req, res) => {
-      const { email, search } = req.query;
+    app.get("/invoiceCollections", verifyToken, async (req, res) => {
+
       let query = {};
+      const { email } = req.query;
+
+      if (req.user.email !== email) {
+        res.status(403).send({ message: 'forbidden access' })
+      }
+
+      const result = await invoiceCollection.find(query).toArray();
+      res.send(result);
+    });
+    app.get("/myInvoices", verifyToken, async (req, res) => {
+      const { email, search } = req.query;
+      // console.log(req.user.email)
+      let query = {};
+
+      if (req.user.email !== email) {
+        res.status(403).send({ message: 'forbidden access' })
+      }
 
       if (email) {
         query.email = email;
@@ -314,7 +339,13 @@ async function run() {
       res.json({ message: 'Invoice marked as paid.' });
     });
 
-    app.get('/allPaidData', async (req, res) => {
+    app.get('/allPaidData', verifyToken, async (req, res) => {
+     
+      const { email } = req.query;
+
+      if (req.user.email !== email) {
+        res.status(403).send({ message: 'forbidden access' })
+      }
       const result = await invoiceCollection.find({ paid: true }).toArray()
       res.send(result)
     })
