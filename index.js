@@ -10,7 +10,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express()
 app.use(cors({
-  origin:'http://localhost:5173',
+  origin:['http://localhost:5173', 'https://ezinvo-billing-client.vercel.app'],
   credentials: true,
 }))
 app.use(express.json())
@@ -64,7 +64,7 @@ async function run() {
       res.cookie('token', token, {
         httpOnly: true,
         secure: true,
-        sameSite: 'None',
+        sameSite: 'none',
         maxAge: 7 * 24 * 60 * 60 * 1000
       }).send({ success: true })
     })
