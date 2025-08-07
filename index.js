@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser')
 require("dotenv").config();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const serverless = require("serverless-http");
 
 const app = express()
 app.use(cors({
@@ -64,7 +65,7 @@ async function run() {
       res.cookie('token', token, {
         httpOnly: true,
         secure: true,
-        sameSite: 'none',
+        sameSite: 'None',
         maxAge: 7 * 24 * 60 * 60 * 1000
       }).send({ success: true })
     })
@@ -183,6 +184,7 @@ async function run() {
 
       let query = {};
       const { email } = req.query;
+      
 
       if (req.user.email !== email) {
         res.status(403).send({ message: 'forbidden access' })
@@ -193,7 +195,7 @@ async function run() {
     });
     app.get("/myInvoices", verifyToken, async (req, res) => {
       const { email, search } = req.query;
-      // console.log(req.user.email)
+      console.log(req.user.email,email)
       let query = {};
 
       if (req.user.email !== email) {
@@ -357,7 +359,7 @@ async function run() {
 }
 run().catch(console.dir);
 
-
+module.exports.handler = serverless(app);
 
 app.get('/', (req, res) => {
   res.send("ez invo running")
