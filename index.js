@@ -7,11 +7,11 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser')
 require("dotenv").config();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const serverless = require("serverless-http");
+// const serverless = require("serverless-http");
 
 const app = express()
 app.use(cors({
-  origin:['http://localhost:5173', 'https://ezinvo-billing-client.vercel.app'],
+  origin: ['http://localhost:5173', 'https://ezinvo-billing-client.vercel.app'],
   credentials: true,
 }))
 app.use(express.json())
@@ -22,12 +22,12 @@ const verifyToken = (req, res, next) => {
   const token = req.cookies?.token;
   // console.log(Date.now(), token)
   if (!token) {
-    return res.status(401).send({ message: 'unauthorized access not found',token:token || null })
+    return res.status(401).send({ message: 'unauthorized access not found', token: token || null })
   }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
-      return res.status(401).send({ message: 'unauthorized access not verify',token:token || null })
+      return res.status(401).send({ message: 'unauthorized access not verify', token: token || null })
     }
 
     req.user = decoded;
@@ -60,13 +60,14 @@ async function run() {
 
 
     app.post('/jwt', async (req, res) => {
-      const user =  req.body;
-      const token = jwt.sign(user, process.env.JWT_SECRET);
+      const user = req.body;
+      const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '7d' });
       res.cookie('token', token, {
         httpOnly: true,
         secure: true,
-        sameSite: 'None',
-        maxAge: 7 * 24 * 60 * 60 * 1000
+        sameSite: 'none',
+        // secure: process.env.NODE_ENV === 'production',
+        // sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
       }).send({ success: true })
     })
 
@@ -184,7 +185,7 @@ async function run() {
 
       let query = {};
       const { email } = req.query;
-      
+
 
       if (req.user.email !== email) {
         res.status(403).send({ message: 'forbidden access' })
@@ -195,7 +196,7 @@ async function run() {
     });
     app.get("/myInvoices", verifyToken, async (req, res) => {
       const { email, search } = req.query;
-      console.log(req.user.email,email)
+      console.log(req.user.email, email)
       let query = {};
 
       if (req.user.email !== email) {
@@ -342,7 +343,7 @@ async function run() {
     });
 
     app.get('/allPaidData', verifyToken, async (req, res) => {
-     
+
       const { email } = req.query;
 
       if (req.user.email !== email) {
@@ -359,7 +360,7 @@ async function run() {
 }
 run().catch(console.dir);
 
-module.exports.handler = serverless(app);
+// module.exports.handler = serverless(app);
 
 app.get('/', (req, res) => {
   res.send("ez invo running")
